@@ -2,8 +2,9 @@ import { ConvoKitClient as JavaScriptConvoKitClient } from '@convokitapp/sdk'
 import { describe, expect, it } from 'vitest'
 import {
   ConvoKitClient, ConvoKitRealtime, covers, readThrough,
-  type Conversation, type InboxEntry, type InboxListOptions, type InboxPage, type InboxSummary,
-  type MarkConversationReadOptions, type Message, type ReadPosition,
+  type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
+  type ConversationMembership, type ConversationPrivateState, type InboxEntry, type InboxListOptions,
+  type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message, type ReadPosition,
 } from '../src/exports'
 
 describe('read position re-exports', () => {
@@ -38,7 +39,8 @@ describe('inbox re-exports', () => {
     const summary: InboxSummary = {
       latestMessage, unreadCount: 1, unreadCountCapped: false,
       readPosition: { messageId: 'message-1', createdAt: new Date('2026-09-21T11:30:00.000Z') },
-      lastReadAt: new Date('2026-09-21T11:30:00.000Z'), activityAt: latestMessage.createdAt,
+      lastReadAt: new Date('2026-09-21T11:30:00.000Z'), isUnread: true, unreadMarkedAt: null,
+      privateStateVersion: 0, activityAt: latestMessage.createdAt,
     }
     const entry: InboxEntry = { ...summary, conversation }
     const page: InboxPage = { entries: [entry], nextCursor: null }
@@ -54,5 +56,50 @@ describe('inbox re-exports', () => {
     expect(ConvoKitClient.prototype.listInbox).toBe(JavaScriptConvoKitClient.prototype.listInbox)
     expect(typeof ConvoKitClient.prototype.listInbox).toBe('function')
     expect(typeof ConvoKitRealtime.prototype.onInboxActivity).toBe('function')
+  })
+})
+
+describe('mark unread re-exports', () => {
+  it('forwards the private unread state types from @convokitapp/sdk', () => {
+    const membership: ConversationMembership = {
+      role: 'READ_WRITE', lastReadAt: null, readPosition: null,
+      unreadMarkedAt: new Date('2026-09-21T12:00:00.000Z'), privateStateVersion: 7,
+    }
+    const legacy: Conversation = {
+      id: 'conversation-1', title: null, imageUrl: null, appId: 'app-1', displayTitle: 'Ana',
+      description: null, participants: [], createdAt: new Date('2026-09-21T11:00:00.000Z'),
+      updatedAt: new Date('2026-09-21T11:00:00.000Z'),
+    }
+    const conversation: Conversation = { ...legacy, membership }
+    const marked: InboxSummary = {
+      latestMessage: null, unreadCount: 0, unreadCountCapped: false, readPosition: null, lastReadAt: null,
+      isUnread: true, unreadMarkedAt: membership.unreadMarkedAt, privateStateVersion: membership.privateStateVersion,
+      activityAt: conversation.createdAt,
+    }
+    const state: ConversationPrivateState = {
+      conversationId: conversation.id, unreadMarkedAt: membership.unreadMarkedAt, privateStateVersion: 7,
+    }
+    const result: ClearUnreadResult = { ...state, cleared: false }
+    const clearOptions: ClearConversationUnreadOptions = { ifVersion: membership.privateStateVersion }
+    const readOptions: MarkConversationReadOptions = {
+      throughMessageId: 'message-2', privateStateVersion: membership.privateStateVersion,
+    }
+    const asState: ConversationPrivateState = result
+
+    expect(conversation.membership?.privateStateVersion).toBe(7)
+    expect(legacy.membership).toBeUndefined()
+    expect(marked.isUnread).toBe(true)
+    expect(marked.unreadCount).toBe(0)
+    expect(result.cleared).toBe(false)
+    expect(asState.privateStateVersion).toBe(state.privateStateVersion)
+    expect(clearOptions.ifVersion).toBe(7)
+    expect(readOptions.privateStateVersion).toBe(7)
+  })
+
+  it('inherits markConversationUnread and clearConversationUnread from the shared 0.7 core without overriding them', () => {
+    expect(ConvoKitClient.prototype.markConversationUnread).toBe(JavaScriptConvoKitClient.prototype.markConversationUnread)
+    expect(ConvoKitClient.prototype.clearConversationUnread).toBe(JavaScriptConvoKitClient.prototype.clearConversationUnread)
+    expect(typeof ConvoKitClient.prototype.markConversationUnread).toBe('function')
+    expect(typeof ConvoKitClient.prototype.clearConversationUnread).toBe('function')
   })
 })

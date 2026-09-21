@@ -34,8 +34,34 @@ returns an `InboxPage` of rooms in activity order with `latestMessage`,
 and `client.realtime.onInboxActivity(clientId, handler)` signals message and
 read-position activity beside `onInboxChanged`. Both are inherited unchanged;
 `InboxListOptions`, `InboxSummary`, `InboxEntry` and `InboxPage` are re-exported
-here. Version 0.6.0 requires `@convokitapp/sdk` 0.6.x and the backend inbox
-deployment; against an older backend `listInbox()` fails with status 404.
+here. Against a backend without the inbox deployment `listInbox()` fails with
+status 404.
+
+Private "mark unread" follows the shared SDK as well:
+`markConversationUnread(conversationId)` sets a marker only the caller can see
+and returns `ConversationPrivateState { conversationId, unreadMarkedAt,
+privateStateVersion }`;
+`clearConversationUnread(conversationId, { ifVersion? })` removes it and returns
+`ClearUnreadResult` (the state plus `cleared`, which is `false` rather than an
+error when nothing was marked or `ifVersion` no longer matched). Every
+`InboxSummary` now carries `isUnread`, `unreadMarkedAt` and `privateStateVersion`
+as required members (consumer-built literals gain the three); render the numeric
+badge from `unreadCount` as before and a numberless dot (accessible name
+"Unread") when `isUnread` is true while the count is 0 and not capped, never an
+invented count. Capture `conversation.membership?.privateStateVersion` once when
+a room opens (`getConversation` only; `undefined` on a 0.6 backend) and send it
+as `privateStateVersion` with every `markConversationRead` acknowledgement of
+that open, never a value from a later refresh: the marker clears only while the
+version is still current, so a mark issued after the open survives that open's
+acknowledgements. An empty room has nothing to acknowledge; send
+`{ privateStateVersion }` alone to clear its marker, or call
+`clearConversationUnread(conversationId, { ifVersion })`. Marker changes reach
+other devices through `onInboxActivity`. All of this is inherited unchanged;
+`ConversationMembership`, `ConversationPrivateState`, `ClearUnreadResult` and
+`ClearConversationUnreadOptions` are re-exported here. Version 0.7.0 requires
+`@convokitapp/sdk` 0.7.x and the backend mark-unread deployment; against a 0.6
+backend the `/unread` calls fail with status 404, acknowledgements never clear
+a marker and `getConversation()` returns no `membership`.
 
 Tested matrix: Node 22, React 19.2, React Native 0.86–0.87, Hermes, and the New
 Architecture. Publish `@convokitapp/sdk` before this package.

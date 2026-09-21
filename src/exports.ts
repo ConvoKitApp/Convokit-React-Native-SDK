@@ -11,7 +11,8 @@ export {
   CONVOKIT_API_URL, ConvoKitError, ConvoKitRealtime, covers, createClientMessageId, readThrough,
 } from '@convokitapp/sdk'
 export type {
-  AppUser, ContactMedia, Conversation, ConversationListOptions, ConvoKitClientOptions,
+  AppUser, ClearConversationUnreadOptions, ClearUnreadResult, ContactMedia, Conversation,
+  ConversationListOptions, ConversationMembership, ConversationPrivateState, ConvoKitClientOptions,
   CreateConversationInput, FetchImplementation, FileMedia, ImageMedia, InboxEntry,
   InboxListOptions, InboxPage, InboxSummary, JsonPrimitive, JsonValue, LocationMedia,
   MarkConversationReadOptions, Message, MessageDeletedEvent, MessageEvent, MessageListOptions,
