@@ -12,12 +12,12 @@ export {
 } from '@convokitapp/sdk'
 export type {
   AppUser, ContactMedia, Conversation, ConversationListOptions, ConvoKitClientOptions,
-  CreateConversationInput, FetchImplementation, FileMedia, ImageMedia, JsonPrimitive,
-  JsonValue, LocationMedia, MarkConversationReadOptions, Message, MessageDeletedEvent,
-  MessageEvent, MessageListOptions, MessageMedia, Page, PaginationOptions, Participant,
-  PresenceEvent, ReadEvent, ReadPosition, ReadPositionTarget, ReadThroughSource,
-  RealtimeConnectionEvent, RealtimeConnectionHandlers, RealtimeHandlers,
-  RealtimeStatus, RealtimeSubscription, SendMessageInput, TokenProvider, TypingEvent,
-  UploadBody, UploadConversationImageInput, UploadInput, UploadMessageMediaInput,
+  CreateConversationInput, FetchImplementation, FileMedia, ImageMedia, InboxEntry,
+  InboxListOptions, InboxPage, InboxSummary, JsonPrimitive, JsonValue, LocationMedia,
+  MarkConversationReadOptions, Message, MessageDeletedEvent, MessageEvent, MessageListOptions,
+  MessageMedia, Page, PaginationOptions, Participant, PresenceEvent, ReadEvent, ReadPosition,
+  ReadPositionTarget, ReadThroughSource, RealtimeConnectionEvent, RealtimeConnectionHandlers,
+  RealtimeHandlers, RealtimeStatus, RealtimeSubscription, SendMessageInput, TokenProvider,
+  TypingEvent, UploadBody, UploadConversationImageInput, UploadInput, UploadMessageMediaInput,
   UploadUserAvatarInput,
 } from '@convokitapp/sdk'
