@@ -1,6 +1,10 @@
 export { ConvoKitClient } from './client'
 export type { NativeMessageMediaInput, ReactNativeClientOptions } from './client'
 export { assertReactNativeRuntime, fetchRuntimeAdapter } from './runtime'
+export { useInbox, useMessages, useTyping } from './hooks'
+export type {
+  UseInboxOptions, UseInboxResult, UseMessagesOptions, UseMessagesResult, UseTypingOptions, UseTypingResult,
+} from './hooks'
 export { installEncodingPolyfills } from './encoding'
 export type {
   DownloadedMediaInput,
