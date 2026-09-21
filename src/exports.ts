@@ -8,12 +8,13 @@ export type {
   ReactNativeRuntimeAdapter,
 } from './runtime'
 export {
-  CONVOKIT_API_URL, ConvoKitError, ConvoKitRealtime, covers, createClientMessageId, readThrough,
+  CONVOKIT_API_URL, ConvoKitError, ConvoKitRealtime, covers, createClientMessageId, isEditedMessage,
+  readThrough,
 } from '@convokitapp/sdk'
 export type {
   AppUser, ClearConversationUnreadOptions, ClearUnreadResult, ContactMedia, Conversation,
   ConversationListOptions, ConversationMembership, ConversationPrivateState, ConvoKitClientOptions,
-  CreateConversationInput, FetchImplementation, FileMedia, ImageMedia, InboxEntry,
+  CreateConversationInput, EditMessageInput, FetchImplementation, FileMedia, ImageMedia, InboxEntry,
   InboxListOptions, InboxPage, InboxSummary, JsonPrimitive, JsonValue, LocationMedia,
   MarkConversationReadOptions, Message, MessageDeletedEvent, MessageEvent, MessageListOptions,
   MessageMedia, Page, PaginationOptions, Participant, PresenceEvent, ReadEvent, ReadPosition,

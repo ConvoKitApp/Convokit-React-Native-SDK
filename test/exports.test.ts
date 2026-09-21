@@ -1,10 +1,13 @@
-import { ConvoKitClient as JavaScriptConvoKitClient } from '@convokitapp/sdk'
+import {
+  ConvoKitClient as JavaScriptConvoKitClient, isEditedMessage as javaScriptIsEditedMessage,
+} from '@convokitapp/sdk'
 import { describe, expect, it } from 'vitest'
 import {
-  ConvoKitClient, ConvoKitRealtime, covers, readThrough,
+  ConvoKitClient, ConvoKitRealtime, covers, isEditedMessage, readThrough,
   type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
-  type ConversationMembership, type ConversationPrivateState, type InboxEntry, type InboxListOptions,
-  type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message, type ReadPosition,
+  type ConversationMembership, type ConversationPrivateState, type EditMessageInput, type InboxEntry,
+  type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
+  type ReadPosition,
 } from '../src/exports'
 
 describe('read position re-exports', () => {
@@ -29,7 +32,7 @@ describe('inbox re-exports', () => {
     const options: InboxListOptions = { limit: 30, cursor: null, archived: false }
     const latestMessage: Message = {
       id: 'message-2', conversationId: 'conversation-1', senderId: 'user-2', text: 'hello',
-      media: [], createdAt: new Date('2026-09-21T12:00:00.000Z'), updatedAt: null,
+      media: [], createdAt: new Date('2026-09-21T12:00:00.000Z'), updatedAt: null, revision: 0,
     }
     const conversation: Conversation = {
       id: 'conversation-1', title: null, imageUrl: null, appId: 'app-1', displayTitle: 'Ana',
@@ -101,5 +104,43 @@ describe('mark unread re-exports', () => {
     expect(ConvoKitClient.prototype.clearConversationUnread).toBe(JavaScriptConvoKitClient.prototype.clearConversationUnread)
     expect(typeof ConvoKitClient.prototype.markConversationUnread).toBe('function')
     expect(typeof ConvoKitClient.prototype.clearConversationUnread).toBe('function')
+  })
+})
+
+describe('message edit re-exports', () => {
+  it('forwards EditMessageInput, isEditedMessage and the required Message.revision from @convokitapp/sdk', () => {
+    const sent: Message = {
+      id: 'message-1', conversationId: 'conversation-1', senderId: 'user-1', text: 'hello',
+      media: [], createdAt: new Date('2026-09-21T12:00:00.000Z'), updatedAt: new Date('2026-09-21T12:01:00.000Z'),
+      revision: 0,
+    }
+    const edited: Message = { ...sent, text: 'hello again', revision: sent.revision + 1 }
+    const captionCleared: Message = {
+      ...edited, text: null, media: [{ type: 'image', url: 'https://cdn.example/photo.jpg' }], revision: 2,
+    }
+    const edit: EditMessageInput = { text: 'hello again', revision: sent.revision }
+    const clearCaption: EditMessageInput = { text: null, revision: edited.revision }
+    // @ts-expect-error Consumer-built Message literals must carry `revision` since 0.8.0.
+    const legacy: Message = {
+      id: 'message-0', conversationId: 'conversation-1', senderId: 'user-1', text: 'legacy',
+      media: [], createdAt: new Date('2026-09-21T11:00:00.000Z'), updatedAt: null,
+    }
+
+    // updatedAt is later than createdAt on the sent row; only the revision decides.
+    expect(isEditedMessage(sent)).toBe(false)
+    expect(isEditedMessage(edited)).toBe(true)
+    expect(isEditedMessage(captionCleared)).toBe(true)
+    expect(isEditedMessage({ ...legacy, revision: 0 })).toBe(false)
+    expect(edit.revision).toBe(0)
+    expect(clearCaption.text).toBeNull()
+    expect(clearCaption.revision).toBe(1)
+    expect(isEditedMessage).toBe(javaScriptIsEditedMessage)
+  })
+
+  it('inherits editMessage and deleteMessage from the shared 0.8 core without overriding them', () => {
+    expect(ConvoKitClient.prototype.editMessage).toBe(JavaScriptConvoKitClient.prototype.editMessage)
+    expect(ConvoKitClient.prototype.deleteMessage).toBe(JavaScriptConvoKitClient.prototype.deleteMessage)
+    expect(typeof ConvoKitClient.prototype.editMessage).toBe('function')
+    expect(typeof ConvoKitClient.prototype.deleteMessage).toBe('function')
   })
 })
