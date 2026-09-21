@@ -3,3 +3,4 @@ lib/
 coverage/
 *.tgz
 *.log
+.DS_Store
