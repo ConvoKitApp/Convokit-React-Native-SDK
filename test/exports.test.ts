@@ -10,6 +10,7 @@ import {
   type MessageContextOptions, type MessageContextPage, type ReadPosition, type ReplyPreview,
   type SendMessageInput,
   type SessionState,
+  type UseInboxResult,
   useConvoKitSession,
 } from '../src/exports'
 
@@ -63,10 +64,15 @@ describe('inbox re-exports', () => {
     }
     const entry: InboxEntry = { ...summary, conversation }
     const page: InboxPage = { entries: [entry], nextCursor: null }
+    const hookResult: UseInboxResult = {
+      entries: [entry], loading: false, loadingMore: false, hasMore: false, error: null,
+      refresh: async () => {}, loadMore: async () => {},
+    }
     const asSummary: InboxSummary = entry
 
     expect(options.cursor).toBeNull()
     expect(page.entries[0]?.conversation.id).toBe('conversation-1')
+    expect(hookResult.entries[0]?.activityAt).toBe(latestMessage.createdAt)
     expect(asSummary.activityAt).toBe(latestMessage.createdAt)
     expect(readThrough(entry, latestMessage)).toBe(false)
   })

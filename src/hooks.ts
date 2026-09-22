@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   createClientMessageId,
-  type Conversation,
+  type InboxEntry,
   type Message,
   type SendMessageInput,
   type SessionState,
@@ -196,50 +196,118 @@ export interface UseInboxOptions {
 }
 
 export interface UseInboxResult {
-  conversations: Conversation[]
+  entries: InboxEntry[]
   loading: boolean
+  loadingMore: boolean
+  hasMore: boolean
   error: Error | null
+  loadMore: () => Promise<void>
   refresh: () => Promise<void>
 }
 
-/** Keeps the signed-in user's conversation list fetched and refetches it on authorized inbox changes. */
+/** Keeps the signed-in user's activity-ordered inbox fetched and live-refreshed. */
 export function useInbox(client: ConvoKitClient, options: UseInboxOptions = {}): UseInboxResult {
   const { pageSize, archived } = options
-  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [entries, setEntries] = useState<InboxEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [error, setError] = useState<Error | null>(null)
-
-  const refresh = useCallback(async () => {
-    setError(null)
-    const list = await client.getConversations({
-      ...(pageSize === undefined ? {} : { limit: pageSize }),
-      ...(archived === undefined ? {} : { archived }),
-    })
-    setConversations(list)
-  }, [client, pageSize, archived])
-
   const session = useConvoKitSession(client)
   const connectedSessionId = session.status === 'connected' ? session.sessionId : null
+  const refreshVersion = useRef(0)
+  const loadingMoreRef = useRef(false)
+
+  const sessionIsCurrent = useCallback(
+    (sessionId: number) =>
+      client.sessionState.status === 'connected' && client.sessionState.sessionId === sessionId,
+    [client],
+  )
+
+  const refresh = useCallback(async () => {
+    if (connectedSessionId === null) return
+    const version = ++refreshVersion.current
+    loadingMoreRef.current = false
+    setLoadingMore(false)
+    setError(null)
+    try {
+      const page = await client.listInbox({
+        ...(pageSize === undefined ? {} : { limit: pageSize }),
+        ...(archived === undefined ? {} : { archived }),
+      })
+      if (!sessionIsCurrent(connectedSessionId) || version !== refreshVersion.current) return
+      setEntries(page.entries)
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setError(toError(cause))
+      }
+      throw cause
+    }
+  }, [client, connectedSessionId, pageSize, archived, sessionIsCurrent])
+
+  const loadMore = useCallback(async () => {
+    if (connectedSessionId === null || nextCursor === null || loadingMoreRef.current) return
+    const cursor = nextCursor
+    const version = refreshVersion.current
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const page = await client.listInbox({
+        ...(pageSize === undefined ? {} : { limit: pageSize }),
+        cursor,
+        ...(archived === undefined ? {} : { archived }),
+      })
+      if (!sessionIsCurrent(connectedSessionId) || version !== refreshVersion.current) return
+      setEntries(current => {
+        const byId = new Map(current.map(entry => [entry.conversation.id, entry]))
+        for (const entry of page.entries) byId.set(entry.conversation.id, entry)
+        return [...byId.values()]
+      })
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setError(toError(cause))
+      }
+    } finally {
+      loadingMoreRef.current = false
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setLoadingMore(false)
+      }
+    }
+  }, [client, connectedSessionId, nextCursor, pageSize, archived, sessionIsCurrent])
 
   useEffect(() => {
+    refreshVersion.current += 1
+    loadingMoreRef.current = false
+    setEntries([])
+    setNextCursor(null)
+    setLoadingMore(false)
     if (connectedSessionId === null) {
-      setConversations([])
       setLoading(true)
       setError(null)
       return
     }
 
     let cancelled = false
-    setConversations([])
-    let sub: ReturnType<ConvoKitClient['realtime']['onInboxChanged']>
+    let changedSub: ReturnType<ConvoKitClient['realtime']['onInboxChanged']> | undefined
+    let activitySub: ReturnType<ConvoKitClient['realtime']['onInboxActivity']> | undefined
+    const refetch = () => {
+      refresh().catch(() => {})
+    }
     try {
-      sub = client.realtime.onInboxChanged(client.clientId, {
-        onEvent: () => {
-          refresh().catch((cause: unknown) => setError(toError(cause)))
-        },
+      changedSub = client.realtime.onInboxChanged(client.clientId, {
+        onEvent: refetch,
+        onError: setError,
+      })
+      activitySub = client.realtime.onInboxActivity(client.clientId, {
+        onEvent: refetch,
         onError: setError,
       })
     } catch (cause) {
+      void changedSub?.unsubscribe()
+      void activitySub?.unsubscribe()
       setError(toError(cause))
       setLoading(false)
       return
@@ -247,20 +315,23 @@ export function useInbox(client: ConvoKitClient, options: UseInboxOptions = {}):
 
     setLoading(true)
     refresh()
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(toError(cause))
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
 
     return () => {
       cancelled = true
-      void sub.unsubscribe()
+      refreshVersion.current += 1
+      void changedSub?.unsubscribe()
+      void activitySub?.unsubscribe()
     }
   }, [client, connectedSessionId, refresh])
 
-  return { conversations, loading, error, refresh }
+  return {
+    entries, loading, loadingMore, hasMore: nextCursor !== null,
+    error, loadMore, refresh,
+  }
 }
 
 export interface UseTypingOptions {

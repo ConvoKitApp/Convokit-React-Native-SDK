@@ -54,8 +54,12 @@ returns an `InboxPage` of rooms in activity order with `latestMessage`,
 and `client.realtime.onInboxActivity(clientId, handler)` signals message and
 read-position activity beside `onInboxChanged`. Both are inherited unchanged;
 `InboxListOptions`, `InboxSummary`, `InboxEntry` and `InboxPage` are re-exported
-here. Against a backend without the inbox deployment `listInbox()` fails with
-status 404.
+here. `useInbox(client, { pageSize, archived })` wraps this activity-ordered API
+and returns `{ entries, loading, loadingMore, hasMore, error, refresh,
+loadMore }`; it listens to both inbox changes and message/read/unread activity.
+Against a backend without the inbox deployment `listInbox()` fails with status
+404. `getConversations()` remains a creation-ordered, offset-paginated resource
+list and is not used by `useInbox()`.
 
 Private "mark unread" follows the shared SDK as well:
 `markConversationUnread(conversationId)` sets a marker only the caller can see
