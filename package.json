@@ -1,6 +1,6 @@
 {
   "name": "@convokitapp/react-native",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "React Native runtime adapters for the ConvoKit JavaScript SDK.",
   "repository": {
     "type": "git",
@@ -41,10 +41,10 @@
       }
     }
   },
-  "files": ["src", "lib", "README.md"],
+  "files": ["src", "lib", "README.md", "CHANGELOG.md"],
   "engines": { "node": ">=22.13.0" },
   "peerDependencies": {
-    "@convokitapp/sdk": ">=0.8.0 <0.9.0",
+    "@convokitapp/sdk": ">=0.9.0 <0.10.0",
     "expo": ">=57.0.0 <58.0.0",
     "expo-crypto": ">=15.0.0",
     "expo-file-system": ">=19.0.0",
@@ -61,7 +61,7 @@
     "react-native-url-polyfill": "^2.0.0"
   },
   "devDependencies": {
-    "@convokitapp/sdk": "^0.8.0",
+    "@convokitapp/sdk": "^0.9.0",
     "@types/react": "^19.2.0",
     "expo": "~57.0.0",
     "expo-crypto": "~57.0.0",

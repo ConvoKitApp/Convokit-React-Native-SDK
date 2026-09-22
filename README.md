@@ -93,11 +93,60 @@ images keep the higher `revision` and fall back to `updatedAt ?? createdAt` on
 equal revisions or when neither row has one, and keep a deletion marker so a
 late edit response or row image cannot restore a deleted message. All of this
 is inherited unchanged; `EditMessageInput` and `isEditedMessage` are
-re-exported here. Version 0.8.0 requires `@convokitapp/sdk` 0.8.x and the
-backend message-edits deployment; against a 0.7 backend the `/own` calls match
-no route and fail with status 404 and `HTTP_ERROR` (an HTML body without a
-JSON `code`), which must never be treated as a deleted message, and rows
-parse with `revision: 0`.
+re-exported here. Against a backend without the message-edits deployment the
+`/own` calls match no route and fail with status 404 and `HTTP_ERROR` (an HTML
+body without a JSON `code`), which must never be treated as a deleted message,
+and rows parse with `revision: 0`.
+
+Quoted replies and jump-to-message follow the shared SDK as well:
+`sendMessage({ conversationId, text, replyToMessageId })` quotes a message that
+is already in the same room. The key is omitted from the request when unset, so
+a send without a quote is byte-identical to 0.8; a target that is not in this
+conversation fails with 404 and `code === 'MESSAGE_NOT_FOUND'`. The reference is
+write-once — neither edit path can change it, and a retry carrying the same
+`clientMessageId` must repeat the same target or it fails with 409, while a
+retry with the same target succeeds with the original row even after the quoted
+message was deleted. Every `Message` may now carry `replyToMessageId?: string`
+as an optional member (consumer-built literals need no change): it holds one
+state for "not a reply" covering both wire shapes, since a missing key (0.8
+backends, Postgres row images) and the explicit `null` a 0.9 backend sends on
+every non-reply row both parse as absent, so `'replyToMessageId' in message` and
+a truthiness check agree and a present value is always a non-empty string.
+Anything that rebuilds a row field by field must copy it, or the quote
+disappears silently. `getReplyPreviews(conversationId, messageIds)` resolves the
+quoted parents of a whole page of replies in one round trip and returns
+`ReplyPreview[]` (`{ id, conversationId, appUserId, text, textTruncated,
+createdAt, revision, mediaCount }`, where `text` is the first 500 characters);
+the SDK trims the IDs, drops duplicates keeping the first occurrence, and splits
+the distinct list into requests of 50 that it merges in that order, so never
+chunk by hand. An empty list, a blank ID or an ID longer than 64 characters
+rejects with `INVALID_ARGUMENT` before any request. The chunking is invisible
+and all-or-nothing: a rejection returns nothing and says nothing about which IDs
+exist, so only absence from a *resolved* result means the quoted message is
+gone, was never in this room, or belongs to another app — render an unavailable
+placeholder, keep the reply and its reference, and never re-request that ID.
+`getMessageContext(conversationId, options)` returns a `MessageContextPage
+{ messages, olderCursor, newerCursor }`: one newest-first window centred on
+`options.messageId`, or continued from a previous window's `olderCursor` or
+`newerCursor`. Exactly one of the three selectors must be present and `limit`
+must be an integer in 1..100 (default 30), both checked before any request, so a
+caller never believes it holds a complete window; both cursors come back on
+every page and are `null` at that end of the history, and a `null` `newerCursor`
+means only that the window touched the live tail when the server read it. An
+unknown, deleted or out-of-room `messageId` fails with 404 and
+`MESSAGE_NOT_FOUND`; a malformed cursor with 400 and `INVALID_CURSOR`. Both
+calls are conversation-scoped reads authorized on membership before any message
+id is read, so a non-member, a departed member or a room in another app answers
+404 `Conversation not found` — an uncoded 404, `code === 'HTTP_ERROR'` — while
+an active `READ` member may call both and neither ever answers 403. All of this
+is inherited unchanged; `ReplyPreview`, `MessageContextPage` and
+`MessageContextOptions` are re-exported here. Version 0.9.0 requires
+`@convokitapp/sdk` 0.9.x and the backend quoted-replies deployment; against a
+0.8 backend both new calls match no route and fail the same way, with status
+404 and `HTTP_ERROR` (an HTML body without a JSON `code`). An uncoded 404 is
+therefore a missing deployment *or* a room this caller may no longer read, and
+in neither case a deleted message or an empty result; rows from a 0.8 backend
+parse with no `replyToMessageId`.
 
 Tested matrix: Node 22, React 19.2, React Native 0.86–0.87, Hermes, and the New
 Architecture. Publish `@convokitapp/sdk` before this package.

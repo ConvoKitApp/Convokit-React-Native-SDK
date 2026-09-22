@@ -7,7 +7,8 @@ import {
   type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
   type ConversationMembership, type ConversationPrivateState, type EditMessageInput, type InboxEntry,
   type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
-  type ReadPosition,
+  type MessageContextOptions, type MessageContextPage, type ReadPosition, type ReplyPreview,
+  type SendMessageInput,
 } from '../src/exports'
 
 describe('read position re-exports', () => {
@@ -142,5 +143,63 @@ describe('message edit re-exports', () => {
     expect(ConvoKitClient.prototype.deleteMessage).toBe(JavaScriptConvoKitClient.prototype.deleteMessage)
     expect(typeof ConvoKitClient.prototype.editMessage).toBe('function')
     expect(typeof ConvoKitClient.prototype.deleteMessage).toBe('function')
+  })
+})
+
+describe('quoted reply re-exports', () => {
+  it('forwards ReplyPreview, MessageContextPage and the optional Message.replyToMessageId from @convokitapp/sdk', () => {
+    const quoted: Message = {
+      id: 'message-1', conversationId: 'conversation-1', senderId: 'user-1', text: 'the original',
+      media: [], createdAt: new Date('2026-09-22T12:00:00.000Z'), updatedAt: null, revision: 1,
+    }
+    const reply: Message = {
+      id: 'message-2', conversationId: 'conversation-1', senderId: 'user-2', text: 'quoting you',
+      media: [], createdAt: new Date('2026-09-22T12:01:00.000Z'), updatedAt: null, revision: 0,
+      replyToMessageId: quoted.id,
+    }
+    // The member is optional, so 0.8 literals keep compiling and "not a reply" has one state:
+    // an absent key (0.8 backend) and the explicit null a 0.9 backend sends both land here.
+    const notAReply: Message = {
+      id: 'message-3', conversationId: 'conversation-1', senderId: 'user-2', text: 'unrelated',
+      media: [], createdAt: new Date('2026-09-22T12:02:00.000Z'), updatedAt: null, revision: 0,
+    }
+    // @ts-expect-error `replyToMessageId` is `string | undefined`, never null, on the parsed row.
+    const nulled: Message = { ...notAReply, replyToMessageId: null }
+    const preview: ReplyPreview = {
+      id: quoted.id, conversationId: quoted.conversationId, senderId: quoted.senderId,
+      text: quoted.text, textTruncated: false, createdAt: quoted.createdAt, revision: quoted.revision,
+      mediaCount: 0,
+    }
+    const page: MessageContextPage = {
+      messages: [reply, quoted], olderCursor: 'older-cursor-1', newerCursor: null,
+    }
+    const centred: MessageContextOptions = { messageId: quoted.id, limit: 30 }
+    const older: MessageContextOptions = { olderCursor: page.olderCursor ?? undefined }
+    const send: SendMessageInput = {
+      conversationId: quoted.conversationId, text: 'quoting you', replyToMessageId: quoted.id,
+    }
+
+    expect(reply.replyToMessageId).toBe('message-1')
+    expect(notAReply.replyToMessageId).toBeUndefined()
+    expect('replyToMessageId' in notAReply).toBe(false)
+    expect(nulled.replyToMessageId).toBeNull()
+    expect(preview.text).toBe('the original')
+    expect(preview.textTruncated).toBe(false)
+    expect(preview.mediaCount).toBe(0)
+    expect(preview.revision).toBe(1)
+    // A resolved window is newest-first and both cursors are always present; a null
+    // `newerCursor` means it touched the live tail when the server read it.
+    expect(page.messages[0]?.replyToMessageId).toBe(quoted.id)
+    expect(page.newerCursor).toBeNull()
+    expect(centred.limit).toBe(30)
+    expect(older.olderCursor).toBe('older-cursor-1')
+    expect(send.replyToMessageId).toBe(quoted.id)
+  })
+
+  it('inherits getReplyPreviews and getMessageContext from the shared 0.9 core without overriding them', () => {
+    expect(ConvoKitClient.prototype.getReplyPreviews).toBe(JavaScriptConvoKitClient.prototype.getReplyPreviews)
+    expect(ConvoKitClient.prototype.getMessageContext).toBe(JavaScriptConvoKitClient.prototype.getMessageContext)
+    expect(typeof ConvoKitClient.prototype.getReplyPreviews).toBe('function')
+    expect(typeof ConvoKitClient.prototype.getMessageContext).toBe('function')
   })
 })
