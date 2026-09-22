@@ -9,7 +9,22 @@ import {
   type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
   type MessageContextOptions, type MessageContextPage, type ReadPosition, type ReplyPreview,
   type SendMessageInput,
+  type SessionState,
+  useConvoKitSession,
 } from '../src/exports'
+
+describe('session state exports', () => {
+  it('forwards the shared state types and exposes the React binding', () => {
+    const state: SessionState = {
+      status: 'disconnected', currentUserId: null, previousUserId: 'user-1', sessionId: 1,
+      reason: 'authentication-rejected', requiresReauthentication: true,
+      errorCode: 'SESSION_REFRESH_REJECTED',
+    }
+
+    expect(state.requiresReauthentication).toBe(true)
+    expect(typeof useConvoKitSession).toBe('function')
+  })
+})
 
 describe('read position re-exports', () => {
   it('forwards the shared helpers and types from @convokitapp/sdk', () => {

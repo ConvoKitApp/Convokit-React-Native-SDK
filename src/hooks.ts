@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { createClientMessageId, type Conversation, type Message, type SendMessageInput } from '@convokitapp/sdk'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  createClientMessageId,
+  type Conversation,
+  type Message,
+  type SendMessageInput,
+  type SessionState,
+} from '@convokitapp/sdk'
 
 import type { ConvoKitClient } from './client'
 
@@ -11,26 +17,11 @@ function toError(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause))
 }
 
-/** `client.realtime` and most client methods throw synchronously until `connectUser()` resolves. */
-function useClientConnected(client: ConvoKitClient): boolean {
-  const [connected, setConnected] = useState(() => client.connected)
-
-  useEffect(() => {
-    if (client.connected) {
-      setConnected(true)
-      return
-    }
-    setConnected(false)
-    const interval = setInterval(() => {
-      if (client.connected) {
-        setConnected(true)
-        clearInterval(interval)
-      }
-    }, 200)
-    return () => clearInterval(interval)
-  }, [client])
-
-  return connected
+/** Reactively observes connect, disconnect, user replacement and terminal session failures. */
+export function useConvoKitSession(client: ConvoKitClient): SessionState {
+  const subscribe = useCallback((listener: () => void) => client.subscribeSession(listener), [client])
+  const getSnapshot = useCallback(() => client.sessionState, [client])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 export interface UseMessagesOptions {
@@ -79,7 +70,8 @@ export function useMessages(
     setMessages(current => current.filter(existing => existing.id !== id))
   }, [])
 
-  const connected = useClientConnected(client)
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
 
   useEffect(() => {
     if (!conversationId) {
@@ -88,13 +80,20 @@ export function useMessages(
       setHasMore(false)
       return
     }
-    if (!connected) {
+    if (connectedSessionId === null) {
+      setMessages([])
       setLoading(true)
+      setLoadingMore(false)
+      setHasMore(true)
+      setError(null)
       return
     }
 
     let cancelled = false
+    setMessages([])
     setLoading(true)
+    setLoadingMore(false)
+    setHasMore(true)
     setError(null)
 
     let messageSub: ReturnType<ConvoKitClient['realtime']['onMessage']>
@@ -133,7 +132,7 @@ export function useMessages(
       void messageSub.unsubscribe()
       void deletedSub.unsubscribe()
     }
-  }, [client, conversationId, pageSize, connected, mergeMessage, removeMessage])
+  }, [client, conversationId, pageSize, connectedSessionId, mergeMessage, removeMessage])
 
   const loadMore = useCallback(async () => {
     if (!conversationId || loadingMore || !hasMore) return
@@ -219,15 +218,19 @@ export function useInbox(client: ConvoKitClient, options: UseInboxOptions = {}):
     setConversations(list)
   }, [client, pageSize, archived])
 
-  const connected = useClientConnected(client)
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
 
   useEffect(() => {
-    if (!connected) {
+    if (connectedSessionId === null) {
+      setConversations([])
       setLoading(true)
+      setError(null)
       return
     }
 
     let cancelled = false
+    setConversations([])
     let sub: ReturnType<ConvoKitClient['realtime']['onInboxChanged']>
     try {
       sub = client.realtime.onInboxChanged(client.clientId, {
@@ -255,7 +258,7 @@ export function useInbox(client: ConvoKitClient, options: UseInboxOptions = {}):
       cancelled = true
       void sub.unsubscribe()
     }
-  }, [client, connected, refresh])
+  }, [client, connectedSessionId, refresh])
 
   return { conversations, loading, error, refresh }
 }
@@ -283,7 +286,8 @@ export function useTyping(
   const [typingUserIds, setTypingUserIds] = useState<string[]>([])
   const remoteTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const localState = useRef<{ isTyping: boolean; idleTimeout?: ReturnType<typeof setTimeout> }>({ isTyping: false })
-  const connected = useClientConnected(client)
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
 
   useEffect(() => {
     const timeouts = remoteTimeouts.current
@@ -294,7 +298,7 @@ export function useTyping(
     if (localState.current.idleTimeout) clearTimeout(localState.current.idleTimeout)
     localState.current.idleTimeout = undefined
 
-    if (!conversationId || !connected) return
+    if (!conversationId || connectedSessionId === null) return
 
     let sub: ReturnType<ConvoKitClient['realtime']['onTyping']>
     try {
@@ -327,11 +331,11 @@ export function useTyping(
       timeouts.forEach(timeout => clearTimeout(timeout))
       timeouts.clear()
     }
-  }, [client, conversationId, connected, remoteIdleMs])
+  }, [client, conversationId, connectedSessionId, remoteIdleMs])
 
   const setTyping = useCallback(
     (isTyping: boolean) => {
-      if (!conversationId || !connected) return
+      if (!conversationId || connectedSessionId === null) return
       const state = localState.current
       if (state.idleTimeout) clearTimeout(state.idleTimeout)
       state.idleTimeout = undefined
@@ -358,7 +362,7 @@ export function useTyping(
         sendTyping(false)
       }
     },
-    [client, conversationId, connected, localIdleMs],
+    [client, conversationId, connectedSessionId, localIdleMs],
   )
 
   return { typingUserIds, setTyping }
