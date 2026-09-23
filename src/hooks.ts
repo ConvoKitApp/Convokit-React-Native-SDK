@@ -1,0 +1,437 @@
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  createClientMessageId,
+  type InboxEntry,
+  type Message,
+  type SendMessageInput,
+  type SessionState,
+} from '@convokitapp/sdk'
+
+import type { ConvoKitClient } from './client'
+
+function sortByCreatedAt(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+}
+
+function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause))
+}
+
+/** Reactively observes connect, disconnect, user replacement and terminal session failures. */
+export function useConvoKitSession(client: ConvoKitClient): SessionState {
+  const subscribe = useCallback((listener: () => void) => client.subscribeSession(listener), [client])
+  const getSnapshot = useCallback(() => client.sessionState, [client])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export interface UseMessagesOptions {
+  pageSize?: number
+}
+
+export interface UseMessagesResult {
+  messages: Message[]
+  loading: boolean
+  loadingMore: boolean
+  hasMore: boolean
+  error: Error | null
+  loadMore: () => Promise<void>
+  sendMessage: (input: Omit<SendMessageInput, 'conversationId'>) => Promise<Message>
+  refresh: () => Promise<void>
+}
+
+/** Keeps one conversation's message list fetched, live-updated and deduped by id/clientMessageId. */
+export function useMessages(
+  client: ConvoKitClient,
+  conversationId: string | null | undefined,
+  options: UseMessagesOptions = {},
+): UseMessagesResult {
+  const pageSize = options.pageSize ?? 30
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+
+  const mergeMessage = useCallback((incoming: Message) => {
+    setMessages(current => {
+      const index = current.findIndex(
+        existing =>
+          existing.id === incoming.id ||
+          (!!incoming.clientMessageId && existing.clientMessageId === incoming.clientMessageId),
+      )
+      if (index === -1) return sortByCreatedAt([...current, incoming])
+      const next = current.slice()
+      next[index] = incoming
+      return next
+    })
+  }, [])
+
+  const removeMessage = useCallback((id: string) => {
+    setMessages(current => current.filter(existing => existing.id !== id))
+  }, [])
+
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
+
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([])
+      setLoading(false)
+      setNextCursor(null)
+      return
+    }
+    if (connectedSessionId === null) {
+      setMessages([])
+      setLoading(true)
+      setLoadingMore(false)
+      setNextCursor(null)
+      setError(null)
+      return
+    }
+
+    let cancelled = false
+    setMessages([])
+    setLoading(true)
+    setLoadingMore(false)
+    setNextCursor(null)
+    setError(null)
+
+    let messageSub: ReturnType<ConvoKitClient['realtime']['onMessage']>
+    let deletedSub: ReturnType<ConvoKitClient['realtime']['onMessageDeleted']>
+    try {
+      messageSub = client.realtime.onMessage(conversationId, {
+        onEvent: event => mergeMessage(event.message),
+        onError: setError,
+      })
+      deletedSub = client.realtime.onMessageDeleted(conversationId, {
+        onEvent: event => removeMessage(event.id),
+        onError: setError,
+      })
+    } catch (cause) {
+      setError(toError(cause))
+      setLoading(false)
+      return
+    }
+
+    client
+      .listMessages({ conversationId, limit: pageSize })
+      .then(page => {
+        if (cancelled) return
+        setMessages(sortByCreatedAt(page.messages))
+        setNextCursor(page.nextCursor)
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(toError(cause))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+      void messageSub.unsubscribe()
+      void deletedSub.unsubscribe()
+    }
+  }, [client, conversationId, pageSize, connectedSessionId, mergeMessage, removeMessage])
+
+  const loadMore = useCallback(async () => {
+    if (!conversationId || loadingMore || nextCursor === null) return
+    const cursor = nextCursor
+
+    setLoadingMore(true)
+    try {
+      const page = await client.listMessages({ conversationId, limit: pageSize, cursor })
+      setMessages(current => {
+        const seen = new Set<string>()
+        const merged: Message[] = []
+        for (const item of [...page.messages, ...current]) {
+          if (seen.has(item.id)) continue
+          seen.add(item.id)
+          merged.push(item)
+        }
+        return sortByCreatedAt(merged)
+      })
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      setError(toError(cause))
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [client, conversationId, pageSize, loadingMore, nextCursor])
+
+  const sendMessage = useCallback(
+    async (input: Omit<SendMessageInput, 'conversationId'>) => {
+      if (!conversationId) throw new Error('useMessages: conversationId is required to send a message')
+      const message = await client.sendMessage({
+        clientMessageId: createClientMessageId(),
+        ...input,
+        conversationId,
+      })
+      mergeMessage(message)
+      return message
+    },
+    [client, conversationId, mergeMessage],
+  )
+
+  const refresh = useCallback(async () => {
+    if (!conversationId) return
+    setError(null)
+    const page = await client.listMessages({ conversationId, limit: pageSize })
+    setMessages(sortByCreatedAt(page.messages))
+    setNextCursor(page.nextCursor)
+  }, [client, conversationId, pageSize])
+
+  return {
+    messages, loading, loadingMore, hasMore: nextCursor !== null,
+    error, loadMore, sendMessage, refresh,
+  }
+}
+
+export interface UseInboxOptions {
+  pageSize?: number
+  archived?: boolean
+}
+
+export interface UseInboxResult {
+  entries: InboxEntry[]
+  loading: boolean
+  loadingMore: boolean
+  hasMore: boolean
+  error: Error | null
+  loadMore: () => Promise<void>
+  refresh: () => Promise<void>
+}
+
+/** Keeps the signed-in user's activity-ordered inbox fetched and live-refreshed. */
+export function useInbox(client: ConvoKitClient, options: UseInboxOptions = {}): UseInboxResult {
+  const { pageSize, archived } = options
+  const [entries, setEntries] = useState<InboxEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
+  const refreshVersion = useRef(0)
+  const loadingMoreRef = useRef(false)
+
+  const sessionIsCurrent = useCallback(
+    (sessionId: number) =>
+      client.sessionState.status === 'connected' && client.sessionState.sessionId === sessionId,
+    [client],
+  )
+
+  const refresh = useCallback(async () => {
+    if (connectedSessionId === null) return
+    const version = ++refreshVersion.current
+    loadingMoreRef.current = false
+    setLoadingMore(false)
+    setError(null)
+    try {
+      const page = await client.listInbox({
+        ...(pageSize === undefined ? {} : { limit: pageSize }),
+        ...(archived === undefined ? {} : { archived }),
+      })
+      if (!sessionIsCurrent(connectedSessionId) || version !== refreshVersion.current) return
+      setEntries(page.entries)
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setError(toError(cause))
+      }
+      throw cause
+    }
+  }, [client, connectedSessionId, pageSize, archived, sessionIsCurrent])
+
+  const loadMore = useCallback(async () => {
+    if (connectedSessionId === null || nextCursor === null || loadingMoreRef.current) return
+    const cursor = nextCursor
+    const version = refreshVersion.current
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const page = await client.listInbox({
+        ...(pageSize === undefined ? {} : { limit: pageSize }),
+        cursor,
+        ...(archived === undefined ? {} : { archived }),
+      })
+      if (!sessionIsCurrent(connectedSessionId) || version !== refreshVersion.current) return
+      setEntries(current => {
+        const byId = new Map(current.map(entry => [entry.conversation.id, entry]))
+        for (const entry of page.entries) byId.set(entry.conversation.id, entry)
+        return [...byId.values()]
+      })
+      setNextCursor(page.nextCursor)
+    } catch (cause) {
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setError(toError(cause))
+      }
+    } finally {
+      loadingMoreRef.current = false
+      if (sessionIsCurrent(connectedSessionId) && version === refreshVersion.current) {
+        setLoadingMore(false)
+      }
+    }
+  }, [client, connectedSessionId, nextCursor, pageSize, archived, sessionIsCurrent])
+
+  useEffect(() => {
+    refreshVersion.current += 1
+    loadingMoreRef.current = false
+    setEntries([])
+    setNextCursor(null)
+    setLoadingMore(false)
+    if (connectedSessionId === null) {
+      setLoading(true)
+      setError(null)
+      return
+    }
+
+    let cancelled = false
+    let changedSub: ReturnType<ConvoKitClient['realtime']['onInboxChanged']> | undefined
+    let activitySub: ReturnType<ConvoKitClient['realtime']['onInboxActivity']> | undefined
+    const refetch = () => {
+      refresh().catch(() => {})
+    }
+    try {
+      changedSub = client.realtime.onInboxChanged(client.clientId, {
+        onEvent: refetch,
+        onError: setError,
+      })
+      activitySub = client.realtime.onInboxActivity(client.clientId, {
+        onEvent: refetch,
+        onError: setError,
+      })
+    } catch (cause) {
+      void changedSub?.unsubscribe()
+      void activitySub?.unsubscribe()
+      setError(toError(cause))
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    refresh()
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+      refreshVersion.current += 1
+      void changedSub?.unsubscribe()
+      void activitySub?.unsubscribe()
+    }
+  }, [client, connectedSessionId, refresh])
+
+  return {
+    entries, loading, loadingMore, hasMore: nextCursor !== null,
+    error, loadMore, refresh,
+  }
+}
+
+export interface UseTypingOptions {
+  /** How long a remote user's typing indicator survives without a follow-up event. Default 3000ms. */
+  remoteIdleMs?: number
+  /** How long after the local caller's last `setTyping(true)` before an automatic stop is sent. Default 3000ms. */
+  localIdleMs?: number
+}
+
+export interface UseTypingResult {
+  typingUserIds: string[]
+  setTyping: (isTyping: boolean) => void
+}
+
+/** Tracks remote typing state for a conversation and throttles/auto-stops the local user's own signal. */
+export function useTyping(
+  client: ConvoKitClient,
+  conversationId: string | null | undefined,
+  options: UseTypingOptions = {},
+): UseTypingResult {
+  const remoteIdleMs = options.remoteIdleMs ?? 3000
+  const localIdleMs = options.localIdleMs ?? 3000
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([])
+  const remoteTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const localState = useRef<{ isTyping: boolean; idleTimeout?: ReturnType<typeof setTimeout> }>({ isTyping: false })
+  const session = useConvoKitSession(client)
+  const connectedSessionId = session.status === 'connected' ? session.sessionId : null
+
+  useEffect(() => {
+    const timeouts = remoteTimeouts.current
+    timeouts.forEach(timeout => clearTimeout(timeout))
+    timeouts.clear()
+    setTypingUserIds([])
+    localState.current.isTyping = false
+    if (localState.current.idleTimeout) clearTimeout(localState.current.idleTimeout)
+    localState.current.idleTimeout = undefined
+
+    if (!conversationId || connectedSessionId === null) return
+
+    let sub: ReturnType<ConvoKitClient['realtime']['onTyping']>
+    try {
+      sub = client.realtime.onTyping(conversationId, {
+        onEvent: ({ userId, isTyping }) => {
+          const existing = timeouts.get(userId)
+          if (existing) clearTimeout(existing)
+          timeouts.delete(userId)
+
+          if (isTyping) {
+            setTypingUserIds(current => (current.includes(userId) ? current : [...current, userId]))
+            timeouts.set(
+              userId,
+              setTimeout(() => {
+                timeouts.delete(userId)
+                setTypingUserIds(current => current.filter(id => id !== userId))
+              }, remoteIdleMs),
+            )
+          } else {
+            setTypingUserIds(current => current.filter(id => id !== userId))
+          }
+        },
+      })
+    } catch {
+      return
+    }
+
+    return () => {
+      void sub.unsubscribe()
+      timeouts.forEach(timeout => clearTimeout(timeout))
+      timeouts.clear()
+    }
+  }, [client, conversationId, connectedSessionId, remoteIdleMs])
+
+  const setTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!conversationId || connectedSessionId === null) return
+      const state = localState.current
+      if (state.idleTimeout) clearTimeout(state.idleTimeout)
+      state.idleTimeout = undefined
+
+      const sendTyping = (value: boolean) => {
+        try {
+          void client.sendTyping({ conversationId, isTyping: value }).catch(() => {})
+        } catch {
+          // best-effort: connection dropped between the check above and this call
+        }
+      }
+
+      if (isTyping) {
+        if (!state.isTyping) {
+          state.isTyping = true
+          sendTyping(true)
+        }
+        state.idleTimeout = setTimeout(() => {
+          state.isTyping = false
+          sendTyping(false)
+        }, localIdleMs)
+      } else if (state.isTyping) {
+        state.isTyping = false
+        sendTyping(false)
+      }
+    },
+    [client, conversationId, connectedSessionId, localIdleMs],
+  )
+
+  return { typingUserIds, setTyping }
+}

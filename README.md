@@ -4,11 +4,31 @@ React Native facade over `@convokitapp/sdk`. It intentionally excludes the
 server client and adds URI-based upload helpers.
 
 ```ts
-import { ConvoKitClient } from '@convokitapp/react-native'
+import { ConvoKitClient, useConvoKitSession } from '@convokitapp/react-native'
 
 const client = new ConvoKitClient({ clientId, tokenProvider })
 await client.connectUser(appUserId)
 ```
+
+Connection state is reactive through `useConvoKitSession`:
+
+```ts
+import { useEffect } from 'react'
+
+const session = useConvoKitSession(client)
+
+useEffect(() => {
+  if (session.status === 'disconnected' && session.requiresReauthentication) {
+    void logOut()
+  }
+}, [session])
+```
+
+The hook covers connecting, connected, manual disconnect, user replacement and
+terminal token renewal. Every connection attempt has a distinct `sessionId`, so
+reconnecting the same user also restarts the data hooks. `useMessages`,
+`useInbox` and `useTyping` clear retired-session state immediately and no longer
+poll `client.connected`. Realtime channel interruptions remain a separate API.
 
 Expo applications may import `ConvoKitClient` from
 `@convokitapp/react-native/expo` to use the Expo FileSystem adapter.
@@ -34,8 +54,18 @@ returns an `InboxPage` of rooms in activity order with `latestMessage`,
 and `client.realtime.onInboxActivity(clientId, handler)` signals message and
 read-position activity beside `onInboxChanged`. Both are inherited unchanged;
 `InboxListOptions`, `InboxSummary`, `InboxEntry` and `InboxPage` are re-exported
-here. Against a backend without the inbox deployment `listInbox()` fails with
-status 404.
+here. `useInbox(client, { pageSize, archived })` wraps this activity-ordered API
+and returns `{ entries, loading, loadingMore, hasMore, error, refresh,
+loadMore }`; it listens to both inbox changes and message/read/unread activity.
+Against a backend without the inbox deployment `listInbox()` fails with status
+404. `getConversations()` remains a creation-ordered, offset-paginated resource
+list and is not used by `useInbox()`.
+
+Message history follows the same contract: `listMessages({ conversationId,
+limit, cursor })` returns `{ messages, nextCursor }`, with newest-first pages
+and `null` when no older page remains. `useMessages(client, conversationId,
+{ pageSize })` retains that cursor internally; its `loadMore()` fetches older
+messages without constructing cursor fields from the oldest rendered message.
 
 Private "mark unread" follows the shared SDK as well:
 `markConversationUnread(conversationId)` sets a marker only the caller can see

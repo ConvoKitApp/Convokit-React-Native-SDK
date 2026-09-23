@@ -1,6 +1,10 @@
 export { ConvoKitClient } from './client'
 export type { NativeMessageMediaInput, ReactNativeClientOptions } from './client'
 export { assertReactNativeRuntime, fetchRuntimeAdapter } from './runtime'
+export { useConvoKitSession, useInbox, useMessages, useTyping } from './hooks'
+export type {
+  UseInboxOptions, UseInboxResult, UseMessagesOptions, UseMessagesResult, UseTypingOptions, UseTypingResult,
+} from './hooks'
 export { installEncodingPolyfills } from './encoding'
 export type {
   DownloadedMediaInput,
@@ -17,9 +21,11 @@ export type {
   CreateConversationInput, EditMessageInput, FetchImplementation, FileMedia, ImageMedia, InboxEntry,
   InboxListOptions, InboxPage, InboxSummary, JsonPrimitive, JsonValue, LocationMedia,
   MarkConversationReadOptions, Message, MessageContextOptions, MessageContextPage,
-  MessageDeletedEvent, MessageEvent, MessageListOptions, MessageMedia, Page, PaginationOptions,
-  Participant, PresenceEvent, ReadEvent, ReadPosition, ReadPositionTarget, ReadThroughSource,
-  RealtimeConnectionEvent, RealtimeConnectionHandlers, RealtimeHandlers, RealtimeStatus,
-  RealtimeSubscription, ReplyPreview, SendMessageInput, TokenProvider, TypingEvent, UploadBody,
-  UploadConversationImageInput, UploadInput, UploadMessageMediaInput, UploadUserAvatarInput,
+  MessageDeletedEvent, MessageEvent, MessageListOptions, MessageMedia, MessagePage, MessagePageOptions,
+  Page, PaginationOptions, Participant, PresenceEvent, ReadEvent, ReadPosition,
+  ReadPositionTarget, ReadThroughSource, RealtimeConnectionEvent, RealtimeConnectionHandlers,
+  RealtimeHandlers, RealtimeStatus, RealtimeSubscription, ReplyPreview, SendMessageInput, SessionEndReason,
+  SessionState, TokenProvider,
+  TypingEvent, UploadBody, UploadConversationImageInput, UploadInput, UploadMessageMediaInput,
+  UploadUserAvatarInput,
 } from '@convokitapp/sdk'

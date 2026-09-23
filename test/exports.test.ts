@@ -7,9 +7,25 @@ import {
   type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
   type ConversationMembership, type ConversationPrivateState, type EditMessageInput, type InboxEntry,
   type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
-  type MessageContextOptions, type MessageContextPage, type ReadPosition, type ReplyPreview,
-  type SendMessageInput,
+  type MessageContextOptions, type MessageContextPage, type MessagePage, type MessagePageOptions,
+  type ReadPosition, type ReplyPreview, type SendMessageInput,
+  type SessionState,
+  type UseInboxResult,
+  useConvoKitSession,
 } from '../src/exports'
+
+describe('session state exports', () => {
+  it('forwards the shared state types and exposes the React binding', () => {
+    const state: SessionState = {
+      status: 'disconnected', currentUserId: null, previousUserId: 'user-1', sessionId: 1,
+      reason: 'authentication-rejected', requiresReauthentication: true,
+      errorCode: 'SESSION_REFRESH_REJECTED',
+    }
+
+    expect(state.requiresReauthentication).toBe(true)
+    expect(typeof useConvoKitSession).toBe('function')
+  })
+})
 
 describe('read position re-exports', () => {
   it('forwards the shared helpers and types from @convokitapp/sdk', () => {
@@ -48,10 +64,15 @@ describe('inbox re-exports', () => {
     }
     const entry: InboxEntry = { ...summary, conversation }
     const page: InboxPage = { entries: [entry], nextCursor: null }
+    const hookResult: UseInboxResult = {
+      entries: [entry], loading: false, loadingMore: false, hasMore: false, error: null,
+      refresh: async () => {}, loadMore: async () => {},
+    }
     const asSummary: InboxSummary = entry
 
     expect(options.cursor).toBeNull()
     expect(page.entries[0]?.conversation.id).toBe('conversation-1')
+    expect(hookResult.entries[0]?.activityAt).toBe(latestMessage.createdAt)
     expect(asSummary.activityAt).toBe(latestMessage.createdAt)
     expect(readThrough(entry, latestMessage)).toBe(false)
   })
@@ -60,6 +81,17 @@ describe('inbox re-exports', () => {
     expect(ConvoKitClient.prototype.listInbox).toBe(JavaScriptConvoKitClient.prototype.listInbox)
     expect(typeof ConvoKitClient.prototype.listInbox).toBe('function')
     expect(typeof ConvoKitRealtime.prototype.onInboxActivity).toBe('function')
+  })
+})
+
+describe('message page re-exports', () => {
+  it('forwards opaque message pagination and the inherited client method', () => {
+    const options: MessagePageOptions = { conversationId: 'conversation-1', limit: 20, cursor: null }
+    const page: MessagePage = { messages: [], nextCursor: null }
+
+    expect(options.cursor).toBeNull()
+    expect(page.nextCursor).toBeNull()
+    expect(ConvoKitClient.prototype.listMessages).toBe(JavaScriptConvoKitClient.prototype.listMessages)
   })
 })
 
