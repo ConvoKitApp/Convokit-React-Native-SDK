@@ -3,6 +3,21 @@
 Releases before 0.9.0 are described in `README.md`, which documents each
 behaviour this package re-exports rather than a per-release history.
 
+## 1.0.0
+
+- Bundle `@convokitapp/sdk` 1.0.0 as a runtime dependency, so consumers do not
+  need to install or align a separate copy of the shared JavaScript SDK.
+- Add `useConvoKitSession`, which reactively exposes connecting, connected and
+  disconnected session states, including terminal authentication failures that
+  require the application to return the user to sign-in.
+- Add `useMessages`, `useInbox` and `useTyping`. The data hooks reset when the
+  authenticated session changes and ignore results from retired sessions.
+- Make `useInbox` use the activity-ordered inbox API and opaque cursor pages.
+  Message history now uses the matching `listMessages` cursor contract when
+  loading older messages.
+- Continue to re-export the 0.9.0 quoted-reply and message-context surface from
+  the shared SDK.
+
 ## 0.9.0
 
 - Re-export the quoted-reply surface of `@convokitapp/sdk` 0.9.0 so React
