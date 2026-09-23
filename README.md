@@ -61,6 +61,12 @@ Against a backend without the inbox deployment `listInbox()` fails with status
 404. `getConversations()` remains a creation-ordered, offset-paginated resource
 list and is not used by `useInbox()`.
 
+Message history follows the same contract: `listMessages({ conversationId,
+limit, cursor })` returns `{ messages, nextCursor }`, with newest-first pages
+and `null` when no older page remains. `useMessages(client, conversationId,
+{ pageSize })` retains that cursor internally; its `loadMore()` fetches older
+messages without constructing cursor fields from the oldest rendered message.
+
 Private "mark unread" follows the shared SDK as well:
 `markConversationUnread(conversationId)` sets a marker only the caller can see
 and returns `ConversationPrivateState { conversationId, unreadMarkedAt,

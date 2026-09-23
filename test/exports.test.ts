@@ -7,8 +7,8 @@ import {
   type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
   type ConversationMembership, type ConversationPrivateState, type EditMessageInput, type InboxEntry,
   type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
-  type MessageContextOptions, type MessageContextPage, type ReadPosition, type ReplyPreview,
-  type SendMessageInput,
+  type MessageContextOptions, type MessageContextPage, type MessagePage, type MessagePageOptions,
+  type ReadPosition, type ReplyPreview, type SendMessageInput,
   type SessionState,
   type UseInboxResult,
   useConvoKitSession,
@@ -81,6 +81,17 @@ describe('inbox re-exports', () => {
     expect(ConvoKitClient.prototype.listInbox).toBe(JavaScriptConvoKitClient.prototype.listInbox)
     expect(typeof ConvoKitClient.prototype.listInbox).toBe('function')
     expect(typeof ConvoKitRealtime.prototype.onInboxActivity).toBe('function')
+  })
+})
+
+describe('message page re-exports', () => {
+  it('forwards opaque message pagination and the inherited client method', () => {
+    const options: MessagePageOptions = { conversationId: 'conversation-1', limit: 20, cursor: null }
+    const page: MessagePage = { messages: [], nextCursor: null }
+
+    expect(options.cursor).toBeNull()
+    expect(page.nextCursor).toBeNull()
+    expect(ConvoKitClient.prototype.listMessages).toBe(JavaScriptConvoKitClient.prototype.listMessages)
   })
 })
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { InboxPage } from '@convokitapp/sdk'
+import type { InboxPage, MessagePage } from '@convokitapp/sdk'
 
 const react = vi.hoisted(() => ({ cleanups: [] as Array<() => void> }))
 
@@ -17,7 +17,7 @@ vi.mock('react', () => ({
   useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
 }))
 
-import { useInbox } from '../src/hooks'
+import { useInbox, useMessages } from '../src/hooks'
 import type { ConvoKitClient } from '../src/client'
 
 afterEach(() => {
@@ -51,5 +51,28 @@ describe('useInbox', () => {
     for (const cleanup of react.cleanups.splice(0)) cleanup()
     expect(changedUnsubscribe).toHaveBeenCalledTimes(1)
     expect(activityUnsubscribe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useMessages', () => {
+  it('uses opaque message pages instead of constructing cursor fields', async () => {
+    const page: MessagePage = { messages: [], nextCursor: null }
+    const unsubscribe = vi.fn(async () => {})
+    const client = {
+      sessionState: { status: 'connected', currentUserId: 'user-1', sessionId: 1 },
+      subscribeSession: vi.fn(() => () => {}),
+      listMessages: vi.fn(async () => page),
+      getMessages: vi.fn(() => { throw new Error('useMessages must use opaque message pages') }),
+      realtime: {
+        onMessage: vi.fn(() => ({ closed: false, unsubscribe })),
+        onMessageDeleted: vi.fn(() => ({ closed: false, unsubscribe })),
+      },
+    }
+
+    useMessages(client as unknown as ConvoKitClient, 'conversation-1', { pageSize: 25 })
+    await vi.waitFor(() => expect(client.listMessages).toHaveBeenCalledWith({
+      conversationId: 'conversation-1', limit: 25,
+    }))
+    expect(client.getMessages).not.toHaveBeenCalled()
   })
 })

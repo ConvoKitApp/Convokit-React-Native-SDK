@@ -49,7 +49,7 @@ export function useMessages(
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
   const mergeMessage = useCallback((incoming: Message) => {
@@ -77,14 +77,14 @@ export function useMessages(
     if (!conversationId) {
       setMessages([])
       setLoading(false)
-      setHasMore(false)
+      setNextCursor(null)
       return
     }
     if (connectedSessionId === null) {
       setMessages([])
       setLoading(true)
       setLoadingMore(false)
-      setHasMore(true)
+      setNextCursor(null)
       setError(null)
       return
     }
@@ -93,7 +93,7 @@ export function useMessages(
     setMessages([])
     setLoading(true)
     setLoadingMore(false)
-    setHasMore(true)
+    setNextCursor(null)
     setError(null)
 
     let messageSub: ReturnType<ConvoKitClient['realtime']['onMessage']>
@@ -114,11 +114,11 @@ export function useMessages(
     }
 
     client
-      .getMessages({ conversationId, limit: pageSize })
+      .listMessages({ conversationId, limit: pageSize })
       .then(page => {
         if (cancelled) return
-        setMessages(sortByCreatedAt(page))
-        setHasMore(page.length === pageSize)
+        setMessages(sortByCreatedAt(page.messages))
+        setNextCursor(page.nextCursor)
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(toError(cause))
@@ -135,35 +135,29 @@ export function useMessages(
   }, [client, conversationId, pageSize, connectedSessionId, mergeMessage, removeMessage])
 
   const loadMore = useCallback(async () => {
-    if (!conversationId || loadingMore || !hasMore) return
-    const oldest = messages[0]
-    if (!oldest) return
+    if (!conversationId || loadingMore || nextCursor === null) return
+    const cursor = nextCursor
 
     setLoadingMore(true)
     try {
-      const page = await client.getMessages({
-        conversationId,
-        limit: pageSize,
-        beforeCreatedAt: oldest.createdAt,
-        beforeId: oldest.id,
-      })
+      const page = await client.listMessages({ conversationId, limit: pageSize, cursor })
       setMessages(current => {
         const seen = new Set<string>()
         const merged: Message[] = []
-        for (const item of [...page, ...current]) {
+        for (const item of [...page.messages, ...current]) {
           if (seen.has(item.id)) continue
           seen.add(item.id)
           merged.push(item)
         }
         return sortByCreatedAt(merged)
       })
-      setHasMore(page.length === pageSize)
+      setNextCursor(page.nextCursor)
     } catch (cause) {
       setError(toError(cause))
     } finally {
       setLoadingMore(false)
     }
-  }, [client, conversationId, pageSize, loadingMore, hasMore, messages])
+  }, [client, conversationId, pageSize, loadingMore, nextCursor])
 
   const sendMessage = useCallback(
     async (input: Omit<SendMessageInput, 'conversationId'>) => {
@@ -182,12 +176,15 @@ export function useMessages(
   const refresh = useCallback(async () => {
     if (!conversationId) return
     setError(null)
-    const page = await client.getMessages({ conversationId, limit: pageSize })
-    setMessages(sortByCreatedAt(page))
-    setHasMore(page.length === pageSize)
+    const page = await client.listMessages({ conversationId, limit: pageSize })
+    setMessages(sortByCreatedAt(page.messages))
+    setNextCursor(page.nextCursor)
   }, [client, conversationId, pageSize])
 
-  return { messages, loading, loadingMore, hasMore, error, loadMore, sendMessage, refresh }
+  return {
+    messages, loading, loadingMore, hasMore: nextCursor !== null,
+    error, loadMore, sendMessage, refresh,
+  }
 }
 
 export interface UseInboxOptions {
