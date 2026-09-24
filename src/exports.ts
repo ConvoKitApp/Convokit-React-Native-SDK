@@ -22,6 +22,8 @@ export type {
   InboxListOptions, InboxPage, InboxSummary, JsonPrimitive, JsonValue, LocationMedia,
   MarkConversationReadOptions, Message, MessageContextOptions, MessageContextPage,
   MessageDeletedEvent, MessageEvent, MessageListOptions, MessageMedia, MessagePage, MessagePageOptions,
+  ReactionChangedEvent, ReactionMutationResult, ReactionSummary, MessageReactionSummary,
+  ReactionUser, ReactionUsersPage, ReactionUsersOptions,
   Page, PaginationOptions, Participant, PresenceEvent, ReadEvent, ReadPosition,
   ReadPositionTarget, ReadThroughSource, RealtimeConnectionEvent, RealtimeConnectionHandlers,
   RealtimeHandlers, RealtimeStatus, RealtimeSubscription, ReplyPreview, SendMessageInput, SessionEndReason,
