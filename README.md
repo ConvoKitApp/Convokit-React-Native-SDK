@@ -180,3 +180,7 @@ parse with no `replyToMessageId`.
 
 Tested matrix: Node 22, React 19.2, React Native 0.86–0.87, Hermes, and the New
 Architecture. Publish `@convokitapp/sdk` before this package.
+
+## Emoji reactions
+
+The React Native client re-exports `addReaction`, `removeReaction`, `getReactionSummaries`, `listReactionUsers`, and private `reaction_changed` from the JavaScript core. Keep the exact emoji string (`👍` and `👍🏽` are different), batch visible IDs through the SDK, and pass the opaque `nextCursor` when loading more reactors. `READ` members may view; `READ_WRITE` members may change their own reactions. Refetch visible summaries after reconnect.

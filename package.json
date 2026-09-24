@@ -1,6 +1,6 @@
 {
   "name": "@convokitapp/react-native",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "React Native runtime adapters for the ConvoKit JavaScript SDK.",
   "repository": {
     "type": "git",
@@ -41,8 +41,15 @@
       }
     }
   },
-  "files": ["src", "lib", "README.md", "CHANGELOG.md"],
-  "engines": { "node": ">=22.13.0" },
+  "files": [
+    "src",
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "peerDependencies": {
     "expo": ">=57.0.0 <58.0.0",
     "expo-crypto": ">=15.0.0",
@@ -51,12 +58,18 @@
     "react-native": ">=0.86.0 <0.88.0"
   },
   "peerDependenciesMeta": {
-    "expo": { "optional": true },
-    "expo-crypto": { "optional": true },
-    "expo-file-system": { "optional": true }
+    "expo": {
+      "optional": true
+    },
+    "expo-crypto": {
+      "optional": true
+    },
+    "expo-file-system": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@convokitapp/sdk": "^1.0.0",
+    "@convokitapp/sdk": "^1.1.0",
     "react-native-get-random-values": "^1.11.0",
     "react-native-url-polyfill": "^2.0.0"
   },
@@ -80,6 +93,25 @@
   "react-native-builder-bob": {
     "source": "src",
     "output": "lib",
-    "targets": [["commonjs", {"esm": true}], ["module", {"esm": true}], ["typescript", {"project": "tsconfig.build.json"}]]
+    "targets": [
+      [
+        "commonjs",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
   }
 }

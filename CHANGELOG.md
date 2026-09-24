@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+
+- Re-export the JavaScript SDK's reaction mutation, batched summary, paged reactor, and `reaction_changed` APIs through the React Native client.
+
 Releases before 0.9.0 are described in `README.md`, which documents each
 behaviour this package re-exports rather than a per-release history.
 
