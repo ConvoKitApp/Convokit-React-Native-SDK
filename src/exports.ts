@@ -13,7 +13,7 @@ export type {
 } from './runtime'
 export {
   CONVOKIT_API_URL, ConvoKitError, ConvoKitRealtime, covers, createClientMessageId, isEditedMessage,
-  readThrough,
+  isRateLimitError, readThrough,
 } from '@convokitapp/sdk'
 export type {
   AppUser, ClearConversationUnreadOptions, ClearUnreadResult, ContactMedia, Conversation,

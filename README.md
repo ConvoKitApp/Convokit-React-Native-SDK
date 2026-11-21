@@ -181,6 +181,27 @@ parse with no `replyToMessageId`.
 Tested matrix: Node 22, React 19.2, React Native 0.86–0.87, Hermes, and the New
 Architecture. Publish `@convokitapp/sdk` before this package.
 
+## Rate limits
+
+The API limits writes per user per minute (for example 60 message sends and 20
+new conversations). A limited write rejects with a `ConvoKitError` whose
+`status` is 429 and `code` is `RATE_LIMITED`; `retryAfter` holds the seconds
+to wait. The SDK never retries it for you:
+
+```ts
+import { isRateLimitError } from '@convokitapp/react-native'
+
+try {
+  await client.sendMessage({ conversationId, text })
+} catch (error) {
+  if (isRateLimitError(error)) showToast(`Slow down. Try again in ${error.retryAfter ?? 1}s.`)
+  else throw error
+}
+```
+
+Typing and presence updates (including `useTyping`) are skipped locally until
+the wait has passed, so a busy composer does not keep hitting the limit.
+
 ## Emoji reactions
 
 The React Native client re-exports `addReaction`, `removeReaction`, `getReactionSummaries`, `listReactionUsers`, and private `reaction_changed` from the JavaScript core. Keep the exact emoji string (`👍` and `👍🏽` are different), batch visible IDs through the SDK, and pass the opaque `nextCursor` when loading more reactors. `READ` members may view; `READ_WRITE` members may change their own reactions. Refetch visible summaries after reconnect.
