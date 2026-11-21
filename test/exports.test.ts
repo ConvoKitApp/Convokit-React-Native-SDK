@@ -1,9 +1,10 @@
 import {
-  ConvoKitClient as JavaScriptConvoKitClient, isEditedMessage as javaScriptIsEditedMessage,
+  ConvoKitClient as JavaScriptConvoKitClient, ConvoKitError, isEditedMessage as javaScriptIsEditedMessage,
+  isRateLimitError as javaScriptIsRateLimitError,
 } from '@convokitapp/sdk'
 import { describe, expect, it } from 'vitest'
 import {
-  ConvoKitClient, ConvoKitRealtime, covers, isEditedMessage, readThrough,
+  ConvoKitClient, ConvoKitRealtime, covers, isEditedMessage, isRateLimitError, readThrough,
   type ClearConversationUnreadOptions, type ClearUnreadResult, type Conversation,
   type ConversationMembership, type ConversationPrivateState, type EditMessageInput, type InboxEntry,
   type InboxListOptions, type InboxPage, type InboxSummary, type MarkConversationReadOptions, type Message,
@@ -233,5 +234,20 @@ describe('quoted reply re-exports', () => {
     expect(ConvoKitClient.prototype.getMessageContext).toBe(JavaScriptConvoKitClient.prototype.getMessageContext)
     expect(typeof ConvoKitClient.prototype.getReplyPreviews).toBe('function')
     expect(typeof ConvoKitClient.prototype.getMessageContext).toBe('function')
+  })
+})
+
+describe('rate limit re-exports', () => {
+  it('forwards isRateLimitError and the retryAfter field of the shared error', () => {
+    expect(isRateLimitError).toBe(javaScriptIsRateLimitError)
+    const limited = new ConvoKitError('Too many requests', { status: 429, code: 'RATE_LIMITED', retryAfter: 12 })
+    expect(isRateLimitError(limited)).toBe(true)
+    expect(limited.retryAfter).toBe(12)
+    expect(isRateLimitError(new ConvoKitError('Bad request', { status: 400, code: 'INVALID_ARGUMENT' }))).toBe(false)
+  })
+
+  it('inherits the paused typing and presence signals without overriding them', () => {
+    expect(ConvoKitClient.prototype.sendTyping).toBe(JavaScriptConvoKitClient.prototype.sendTyping)
+    expect(ConvoKitClient.prototype.updatePresence).toBe(JavaScriptConvoKitClient.prototype.updatePresence)
   })
 })

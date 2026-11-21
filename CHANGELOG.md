@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+- Bundle `@convokitapp/sdk` 1.5.0, which handles the API's per-minute rate
+  limits: a rate-limited write rejects with a `ConvoKitError` whose `status`
+  is 429, `code` is `RATE_LIMITED` and `retryAfter` holds the seconds to wait.
+  The SDK never retries such a write itself.
+- `sendTyping` and `updatePresence` (and so `useTyping`) skip further calls
+  of the same kind locally until that wait has passed.
+- Re-export `isRateLimitError(error)`.
+- Also picks up `@convokitapp/sdk` 1.1.1 to 1.4.0, including the fix for a
+  `listMessages` last page with a null `nextCursor`, which `useMessages` uses.
+
 ## 1.1.0
 
 - Re-export the JavaScript SDK's reaction mutation, batched summary, paged reactor, and `reaction_changed` APIs through the React Native client.
